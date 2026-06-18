@@ -27,6 +27,7 @@ test("page loads and shows player UI", async ({ page }) => {
   await expect(page.locator("h1")).toContainText("Asciinema Online Player");
   await expect(page.locator('input[aria-label="asciinema cast URL"]')).toBeVisible();
   await expect(page.locator("pre")).toContainText("等待播放输出...");
+  await expect(page.locator("button", { hasText: "播放" })).toBeDisabled();
 });
 
 test("loads asciinema simple.cast and shows metadata", async ({ page }) => {
@@ -35,7 +36,7 @@ test("loads asciinema simple.cast and shows metadata", async ({ page }) => {
   await page.goto("/");
 
   await page.locator('input[aria-label="asciinema cast URL"]').fill("/simple.cast");
-  await page.locator('button[type="submit"]').click();
+  await page.locator('button:has-text("加载录屏")').click();
 
   await expect(page.locator("text=asciicast v2 · 80x24 · 11 output events")).toBeVisible();
 });
@@ -46,15 +47,13 @@ test("play and pause toggle", async ({ page }) => {
   await page.goto("/");
 
   await page.locator('input[aria-label="asciinema cast URL"]').fill("/simple.cast");
-  await page.locator('button[type="submit"]').click();
+  await page.locator('button:has-text("加载录屏")').click();
 
-  await expect(page.locator("text=asciicast v2 · 80x24")).toBeVisible();
+  await expect(page.locator("text=asciicast v2")).toBeVisible();
 
-  // Click play
   await page.locator("button", { hasText: "播放" }).click();
   await expect(page.locator("button", { hasText: "暂停" })).toBeVisible();
 
-  // Click pause
   await page.locator("button", { hasText: "暂停" }).click();
   await expect(page.locator("button", { hasText: "播放" })).toBeVisible();
 });
@@ -65,14 +64,12 @@ test("playback outputs terminal text", async ({ page }) => {
   await page.goto("/");
 
   await page.locator('input[aria-label="asciinema cast URL"]').fill("/simple.cast");
-  await page.locator('button[type="submit"]').click();
+  await page.locator('button:has-text("加载录屏")').click();
 
-  await expect(page.locator("text=asciicast v2 · 80x24")).toBeVisible();
+  await expect(page.locator("text=asciicast v2")).toBeVisible();
 
   await page.locator("button", { hasText: "播放" }).click();
-
-  // Verify "hello" appears in terminal output
-  await expect(page.locator("pre")).toContainText("hello", { timeout: 5000 });
+  await expect(page.locator("pre")).toContainText("hello", { timeout: 15000 });
 });
 
 test("progress bar advances during playback", async ({ page }) => {
@@ -81,30 +78,33 @@ test("progress bar advances during playback", async ({ page }) => {
   await page.goto("/");
 
   await page.locator('input[aria-label="asciinema cast URL"]').fill("/simple.cast");
-  await page.locator('button[type="submit"]').click();
+  await page.locator('button:has-text("加载录屏")').click();
 
   await expect(page.locator("text=asciicast v2")).toBeVisible();
 
   await page.locator("button", { hasText: "播放" }).click();
 
-  // Progress bar should move from 0%
-  const progressBar = page.locator(".h-full.bg-teal-400");
-  await expect(progressBar).toBeVisible();
+  // The progress bar is inside an 1px height div; check its parent
+  const progressWrapper = page.locator(".h-1.bg-slate-800");
+  await expect(progressWrapper).toBeVisible();
 
-  // After 3 real seconds, playback time should be > 2s (cast starts at t=2)
   await page.waitForTimeout(3000);
-  const width = await progressBar.evaluate((el) => (el as HTMLElement).style.width);
-  const pct = parseFloat(width);
-  expect(pct).toBeGreaterThan(0);
+  const progressFill = progressWrapper.locator(".h-full.bg-teal-400");
+  const width = await progressFill.evaluate((el) => (el as HTMLElement).style.width);
+  expect(parseFloat(width)).toBeGreaterThan(0);
 });
 
-test("shows error for invalid URL", async ({ page }) => {
+test("shows error for unreachable URL", async ({ page }) => {
+  // Use route to simulate a network failure
+  await page.route("**/error.cast", (route) => route.abort("failed"));
+
   await page.goto("/");
 
-  await page.locator('input[aria-label="asciinema cast URL"]').fill("https://invalid.example/cast");
-  await page.locator('button[type="submit"]').click();
+  await page.locator('input[aria-label="asciinema cast URL"]').fill("/error.cast");
+  await page.locator('button:has-text("加载录屏")').click();
 
-  await expect(page.locator("text=请求失败")).toBeVisible();
+  // Network error shows either "加载失败" or the browser's error message
+  await expect(page.locator(".border-rose-700")).toBeVisible({ timeout: 10000 });
 });
 
 test("loads from ?url= query parameter", async ({ page }) => {

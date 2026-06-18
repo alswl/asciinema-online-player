@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { parseAsciicast, Recording, stripAnsi } from "../lib/asciicast";
 
@@ -13,11 +13,11 @@ type LoadState =
 export function Player() {
   const searchParams = useSearchParams();
   const initialUrl = searchParams.get("url") ?? "";
-  const [url, setUrl] = useState(initialUrl);
   const [state, setState] = useState<LoadState>({ status: "idle" });
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [terminalText, setTerminalText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const appliedIndexRef = useRef(0);
   const startedAtRef = useRef<number | null>(null);
 
@@ -119,9 +119,9 @@ export function Player() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void loadRecording(url);
+  function handleLoad() {
+    const inputUrl = inputRef.current?.value ?? "";
+    void loadRecording(inputUrl);
   }
 
   function togglePlayback() {
@@ -152,23 +152,27 @@ export function Player() {
         </header>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-          <form className="flex flex-col gap-3 md:flex-row" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-3 md:flex-row">
             <input
+              ref={inputRef}
               aria-label="asciinema cast URL"
               className="min-h-11 flex-1 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none focus:border-teal-400"
-              onChange={(event) => setUrl(event.target.value)}
+              defaultValue={initialUrl}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleLoad();
+              }}
               placeholder="https://example.com/demo.cast"
               type="url"
-              value={url}
             />
             <button
               className="min-h-11 rounded-md bg-teal-500 px-5 text-sm font-semibold text-slate-950 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={state.status === "loading"}
-              type="submit"
+              onClick={handleLoad}
+              type="button"
             >
               {state.status === "loading" ? "加载中" : "加载录屏"}
             </button>
-          </form>
+          </div>
         </section>
 
         {state.status === "error" ? (
