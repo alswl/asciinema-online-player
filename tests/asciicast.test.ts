@@ -20,6 +20,29 @@ describe("parseAsciicast", () => {
     expect(recording.events).toHaveLength(2);
   });
 
+  it("sorts output events and ignores unsupported event types", () => {
+    const recording = parseAsciicast(
+      [
+        JSON.stringify([0.3, "o", "third"]),
+        JSON.stringify([0.1, "o", "first"]),
+        JSON.stringify([0.2, "i", "ignored"]),
+      ].join("\n"),
+    );
+
+    expect(recording.version).toBe(1);
+    expect(recording.duration).toBe(0.3);
+    expect(recording.events).toEqual([
+      { time: 0.1, type: "o", data: "first" },
+      { time: 0.3, type: "o", data: "third" },
+    ]);
+  });
+
+  it("rejects invalid json lines", () => {
+    expect(() => parseAsciicast("not-json")).toThrow(
+      "文件包含无法解析的 JSON 行",
+    );
+  });
+
   it("strips common ansi escapes for the MVP renderer", () => {
     expect(stripAnsi("\u001b[31mred\u001b[0m")).toBe("red");
   });

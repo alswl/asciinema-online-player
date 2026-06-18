@@ -1,6 +1,6 @@
 export type CastEvent = {
   time: number;
-  type: string;
+  type: "o";
   data: string;
 };
 
@@ -73,10 +73,9 @@ function parseLineEvents(
   },
 ): Recording {
   const events: CastEvent[] = [];
-  const warnings: string[] = [];
 
   for (const line of lines) {
-    const parsed = parseJson(line, warnings);
+    const parsed = parseJson(line);
 
     if (!Array.isArray(parsed) || parsed.length < 3) {
       continue;
@@ -107,11 +106,10 @@ function parseLineEvents(
   };
 }
 
-function parseJson(line: string, warnings?: string[]): unknown {
+function parseJson(line: string): unknown {
   try {
     return JSON.parse(line);
   } catch {
-    warnings?.push(line);
     throw new Error("文件包含无法解析的 JSON 行");
   }
 }

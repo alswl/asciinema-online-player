@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { parseAsciicast, Recording, stripAnsi } from "../lib/asciicast";
 
@@ -20,6 +20,9 @@ export function Player() {
   const inputRef = useRef<HTMLInputElement>(null);
   const appliedIndexRef = useRef(0);
   const startedAtRef = useRef<number | null>(null);
+  const currentTimeRef = useRef(0);
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const recording = state.status === "ready" ? state.recording : null;
   const progress = useMemo(() => {
@@ -30,11 +33,112 @@ export function Player() {
     return Math.min(100, (currentTime / recording.duration) * 100);
   }, [currentTime, recording]);
 
+  const setPlaybackTime = useCallback((nextTime: number) => {
+    currentTimeRef.current = nextTime;
+    setCurrentTime(nextTime);
+  }, []);
+
+  const resetPlayback = useCallback(() => {
+    setIsPlaying(false);
+    setPlaybackTime(0);
+    setTerminalText("");
+    appliedIndexRef.current = 0;
+    startedAtRef.current = null;
+  }, [setPlaybackTime]);
+
+  const flushEvents = useCallback(
+    (nextRecording: Recording, untilTime: number) => {
+      let nextText = "";
+      let nextIndex = appliedIndexRef.current;
+
+      while (
+        nextIndex < nextRecording.events.length &&
+        nextRecording.events[nextIndex].time <= untilTime
+      ) {
+        nextText += stripAnsi(nextRecording.events[nextIndex].data);
+        nextIndex += 1;
+      }
+
+      if (nextText) {
+        setTerminalText((previous) => previous + nextText);
+        appliedIndexRef.current = nextIndex;
+      }
+    },
+    [],
+  );
+
+  const loadRecording = useCallback(
+    async (nextUrl: string) => {
+      const trimmedUrl = nextUrl.trim();
+      const requestId = requestIdRef.current + 1;
+
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      requestIdRef.current = requestId;
+
+      if (!trimmedUrl) {
+        resetPlayback();
+        setState({ status: "idle" });
+        return;
+      }
+
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      setState({ status: "loading" });
+      resetPlayback();
+
+      try {
+        const response = await fetch(trimmedUrl, {
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`请求失败：HTTP ${response.status}`);
+        }
+
+        const text = await response.text();
+        const nextRecording = parseAsciicast(text);
+
+        if (requestIdRef.current === requestId) {
+          setState({ status: "ready", recording: nextRecording });
+        }
+      } catch (error) {
+        if (
+          abortController.signal.aborted ||
+          requestIdRef.current !== requestId
+        ) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "加载失败";
+        setState({ status: "error", message });
+      }
+    },
+    [resetPlayback],
+  );
+
   useEffect(() => {
-    if (initialUrl) {
-      void loadRecording(initialUrl);
+    if (!initialUrl) {
+      return;
     }
-  }, [initialUrl]);
+
+    let isActive = true;
+
+    queueMicrotask(() => {
+      if (isActive) {
+        void loadRecording(initialUrl);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [initialUrl, loadRecording]);
+
+  useEffect(() => {
+    return () => abortControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (!isPlaying || !recording) {
@@ -45,7 +149,7 @@ export function Player() {
 
     const tick = (now: number) => {
       if (startedAtRef.current === null) {
-        startedAtRef.current = now - currentTime * 1000;
+        startedAtRef.current = now - currentTimeRef.current * 1000;
       }
 
       const nextTime = Math.min(
@@ -53,7 +157,7 @@ export function Player() {
         (now - startedAtRef.current) / 1000,
       );
 
-      setCurrentTime(nextTime);
+      setPlaybackTime(nextTime);
       flushEvents(recording, nextTime);
 
       if (nextTime >= recording.duration) {
@@ -68,56 +172,7 @@ export function Player() {
     frame = window.requestAnimationFrame(tick);
 
     return () => window.cancelAnimationFrame(frame);
-  }, [currentTime, isPlaying, recording]);
-
-  async function loadRecording(nextUrl: string) {
-    const trimmedUrl = nextUrl.trim();
-
-    if (!trimmedUrl) {
-      setState({ status: "idle" });
-      return;
-    }
-
-    setState({ status: "loading" });
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setTerminalText("");
-    appliedIndexRef.current = 0;
-    startedAtRef.current = null;
-
-    try {
-      const response = await fetch(trimmedUrl);
-
-      if (!response.ok) {
-        throw new Error(`请求失败：HTTP ${response.status}`);
-      }
-
-      const text = await response.text();
-      const nextRecording = parseAsciicast(text);
-      setState({ status: "ready", recording: nextRecording });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "加载失败";
-      setState({ status: "error", message });
-    }
-  }
-
-  function flushEvents(nextRecording: Recording, untilTime: number) {
-    let nextText = "";
-    let nextIndex = appliedIndexRef.current;
-
-    while (
-      nextIndex < nextRecording.events.length &&
-      nextRecording.events[nextIndex].time <= untilTime
-    ) {
-      nextText += stripAnsi(nextRecording.events[nextIndex].data);
-      nextIndex += 1;
-    }
-
-    if (nextText) {
-      setTerminalText((previous) => previous + nextText);
-      appliedIndexRef.current = nextIndex;
-    }
-  }
+  }, [flushEvents, isPlaying, recording, setPlaybackTime]);
 
   function handleLoad() {
     const inputUrl = inputRef.current?.value ?? "";
@@ -130,7 +185,7 @@ export function Player() {
     }
 
     if (currentTime >= recording.duration) {
-      setCurrentTime(0);
+      setPlaybackTime(0);
       setTerminalText("");
       appliedIndexRef.current = 0;
     }
