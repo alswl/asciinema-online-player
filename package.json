@@ -12,7 +12,8 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.1",
@@ -30,9 +31,20 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.2.9",
+    "husky": "^9.1.7",
     "jsdom": "^27.3.0",
+    "lint-staged": "^17.0.7",
     "prettier": "^3.7.4",
     "typescript": "^6.0.3",
     "vitest": "^4.0.15"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,md,json,mjs}": [
+      "prettier --write"
+    ]
   }
 }
