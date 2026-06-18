@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const SIMPLE_CAST = [
   '{"version": 2, "width": 80, "height": 24}',
@@ -15,7 +15,7 @@ const SIMPLE_CAST = [
   '[12, "o", "hello\\r\\n"]',
 ].join("\n");
 
-function mockCastRoute(page: Parameters<Parameters<typeof test>[1]>[0]["page"], path: string) {
+function mockCastRoute(page: Page, path: string) {
   return page.route(`**${path}`, (route) =>
     route.fulfill({ body: SIMPLE_CAST, headers: { "content-type": "text/plain" } }),
   );
