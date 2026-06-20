@@ -11,7 +11,7 @@ export type MessageKey = keyof typeof dictionaries.en;
 const dictionaries = {
   en: {
     pageTitle: "asciinema online player",
-    pageSubtitle: "static asciinema player",
+    pageSubtitle: "asciinema-online-player",
     heroBadge: "🎬 Local-first Terminal Recorder",
     heroHeading: "Watch your terminal recordings",
     heroDescription:
@@ -63,7 +63,7 @@ const dictionaries = {
   },
   "zh-CN": {
     pageTitle: "asciinema online player",
-    pageSubtitle: "static asciinema player",
+    pageSubtitle: "asciinema-online-player",
     heroBadge: "🎬 本地优先的终端录制器",
     heroHeading: "回放你的终端操作",
     heroDescription:
