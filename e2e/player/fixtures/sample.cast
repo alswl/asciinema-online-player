@@ -1,0 +1,7 @@
+{"version": 2, "width": 80, "height": 24}
+[0.5, "o", "[32mgreen[0m hello\r\n"]
+[1.0, "o", "[31mred[0m world\r\n"]
+[1.5, "o", "plain text\r\n"]
+[2.0, "o", "[1;34mbold blue[0m\r\n"]
+[2.5, "o", "[33myellow[0m [35mmagenta[0m\r\n"]
+[3.0, "o", "demo complete.\r\n"]

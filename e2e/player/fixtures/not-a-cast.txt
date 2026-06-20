@@ -1,0 +1,3 @@
+This is not an asciicast file.
+It is just some plain prose text.
+The player should show an error when this is picked.

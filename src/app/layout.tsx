@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "asciinema-player/dist/bundle/asciinema-player.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

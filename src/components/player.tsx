@@ -1,198 +1,106 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { parseAsciicast, Recording, stripAnsi } from "../lib/asciicast";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FilePicker } from "./file-picker";
+
+/** Check whether text content resembles a valid asciicast recording. */
+function looksLikeAsciicast(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const firstLine = trimmed.split("\n")[0].trim();
+
+  // v1/v2: first line is a JSON object with a "version" field
+  try {
+    const parsed = JSON.parse(firstLine);
+    if (parsed && typeof parsed === "object" && "version" in parsed) {
+      return true;
+    }
+  } catch {
+    // not JSON, continue checking
+  }
+
+  // v1 raw: first line is an event array like [time, "o", "..."]
+  if (/^\[\d+\.?\d*,\s*"[oir]"/.test(firstLine)) {
+    return true;
+  }
+
+  return false;
+}
 
 type LoadState =
   | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; recording: Recording }
-  | { status: "error"; message: string };
+  | { status: "loading"; file: File }
+  | { status: "ready"; file: File }
+  | { status: "error"; file?: File; message: string };
 
 export function Player() {
-  const searchParams = useSearchParams();
-  const initialUrl = searchParams.get("url") ?? "";
   const [state, setState] = useState<LoadState>({ status: "idle" });
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [terminalText, setTerminalText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const appliedIndexRef = useRef(0);
-  const startedAtRef = useRef<number | null>(null);
-  const currentTimeRef = useRef(0);
-  const requestIdRef = useRef(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<Awaited<
+    ReturnType<(typeof import("asciinema-player"))["create"]>
+  > | null>(null);
 
-  const recording = state.status === "ready" ? state.recording : null;
-  const progress = useMemo(() => {
-    if (!recording || recording.duration === 0) {
-      return 0;
+  const disposePlayer = useCallback(() => {
+    if (playerRef.current) {
+      playerRef.current.dispose();
+      playerRef.current = null;
     }
-
-    return Math.min(100, (currentTime / recording.duration) * 100);
-  }, [currentTime, recording]);
-
-  const setPlaybackTime = useCallback((nextTime: number) => {
-    currentTimeRef.current = nextTime;
-    setCurrentTime(nextTime);
   }, []);
 
-  const resetPlayback = useCallback(() => {
-    setIsPlaying(false);
-    setPlaybackTime(0);
-    setTerminalText("");
-    appliedIndexRef.current = 0;
-    startedAtRef.current = null;
-  }, [setPlaybackTime]);
+  // Eagerly preload the asciinema-player module on mount so it is cached
+  // alongside other static assets, enabling offline playback.
+  useEffect(() => {
+    import("asciinema-player").catch(() => {
+      // Silently ignore preload failures — the module will be loaded again
+      // when a file is picked.
+    });
+  }, []);
 
-  const flushEvents = useCallback(
-    (nextRecording: Recording, untilTime: number) => {
-      let nextText = "";
-      let nextIndex = appliedIndexRef.current;
-
-      while (
-        nextIndex < nextRecording.events.length &&
-        nextRecording.events[nextIndex].time <= untilTime
-      ) {
-        nextText += stripAnsi(nextRecording.events[nextIndex].data);
-        nextIndex += 1;
-      }
-
-      if (nextText) {
-        setTerminalText((previous) => previous + nextText);
-        appliedIndexRef.current = nextIndex;
-      }
-    },
-    [],
-  );
-
-  const loadRecording = useCallback(
-    async (nextUrl: string) => {
-      const trimmedUrl = nextUrl.trim();
-      const requestId = requestIdRef.current + 1;
-
-      abortControllerRef.current?.abort();
-      abortControllerRef.current = null;
-      requestIdRef.current = requestId;
-
-      if (!trimmedUrl) {
-        resetPlayback();
-        setState({ status: "idle" });
-        return;
-      }
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      setState({ status: "loading" });
-      resetPlayback();
+  const loadFile = useCallback(
+    async (file: File) => {
+      disposePlayer();
+      setState({ status: "loading", file });
 
       try {
-        const response = await fetch(trimmedUrl, {
-          signal: abortController.signal,
-        });
+        const text = await file.text();
 
-        if (!response.ok) {
-          throw new Error(`请求失败：HTTP ${response.status}`);
+        // Pre-validate: reject files that don't look like asciicast recordings
+        if (!looksLikeAsciicast(text)) {
+          throw new Error(
+            "This file does not appear to be a valid asciicast recording.",
+          );
         }
 
-        const text = await response.text();
-        const nextRecording = parseAsciicast(text);
+        const { create: AsciinemaPlayer } = await import("asciinema-player");
 
-        if (requestIdRef.current === requestId) {
-          setState({ status: "ready", recording: nextRecording });
-        }
-      } catch (error) {
-        if (
-          abortController.signal.aborted ||
-          requestIdRef.current !== requestId
-        ) {
+        if (!containerRef.current) {
           return;
         }
 
-        const message = error instanceof Error ? error.message : "加载失败";
-        setState({ status: "error", message });
+        playerRef.current = AsciinemaPlayer(
+          { data: text },
+          containerRef.current,
+          { fit: "width", autoPlay: true },
+        );
+        setState({ status: "ready", file });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to load recording";
+        setState({ status: "error", file, message });
       }
     },
-    [resetPlayback],
+    [disposePlayer],
   );
 
+  // Dispose on unmount
   useEffect(() => {
-    if (!initialUrl) {
-      return;
-    }
-
-    let isActive = true;
-
-    queueMicrotask(() => {
-      if (isActive) {
-        void loadRecording(initialUrl);
-      }
-    });
-
     return () => {
-      isActive = false;
+      disposePlayer();
     };
-  }, [initialUrl, loadRecording]);
+  }, [disposePlayer]);
 
-  useEffect(() => {
-    return () => abortControllerRef.current?.abort();
-  }, []);
-
-  useEffect(() => {
-    if (!isPlaying || !recording) {
-      return;
-    }
-
-    let frame = 0;
-
-    const tick = (now: number) => {
-      if (startedAtRef.current === null) {
-        startedAtRef.current = now - currentTimeRef.current * 1000;
-      }
-
-      const nextTime = Math.min(
-        recording.duration,
-        (now - startedAtRef.current) / 1000,
-      );
-
-      setPlaybackTime(nextTime);
-      flushEvents(recording, nextTime);
-
-      if (nextTime >= recording.duration) {
-        setIsPlaying(false);
-        startedAtRef.current = null;
-        return;
-      }
-
-      frame = window.requestAnimationFrame(tick);
-    };
-
-    frame = window.requestAnimationFrame(tick);
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [flushEvents, isPlaying, recording, setPlaybackTime]);
-
-  function handleLoad() {
-    const inputUrl = inputRef.current?.value ?? "";
-    void loadRecording(inputUrl);
-  }
-
-  function togglePlayback() {
-    if (!recording) {
-      return;
-    }
-
-    if (currentTime >= recording.duration) {
-      setPlaybackTime(0);
-      setTerminalText("");
-      appliedIndexRef.current = 0;
-    }
-
-    startedAtRef.current = null;
-    setIsPlaying((playing) => !playing);
-  }
+  const isLoading = state.status === "loading";
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -207,27 +115,7 @@ export function Player() {
         </header>
 
         <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-          <div className="flex flex-col gap-3 md:flex-row">
-            <input
-              ref={inputRef}
-              aria-label="asciinema cast URL"
-              className="min-h-11 flex-1 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none focus:border-teal-400"
-              defaultValue={initialUrl}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleLoad();
-              }}
-              placeholder="https://example.com/demo.cast"
-              type="url"
-            />
-            <button
-              className="min-h-11 rounded-md bg-teal-500 px-5 text-sm font-semibold text-slate-950 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={state.status === "loading"}
-              onClick={handleLoad}
-              type="button"
-            >
-              {state.status === "loading" ? "加载中" : "加载录屏"}
-            </button>
-          </div>
+          <FilePicker disabled={isLoading} onFileSelected={loadFile} />
         </section>
 
         {state.status === "error" ? (
@@ -236,39 +124,17 @@ export function Player() {
           </section>
         ) : null}
 
-        <section className="overflow-hidden rounded-lg border border-slate-800 bg-black">
-          <div className="flex flex-col gap-3 border-b border-slate-800 bg-slate-900 p-3 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">
-                {recording?.title ?? "未加载录屏"}
-              </div>
-              <div className="mt-1 text-xs text-slate-400">
-                {recording
-                  ? `asciicast v${recording.version} · ${recording.width}x${recording.height} · ${recording.events.length} output events`
-                  : "输入 .cast 文件 URL 后开始"}
-              </div>
-            </div>
-            <button
-              className="min-h-10 rounded-md border border-slate-700 px-4 text-sm font-semibold hover:border-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!recording}
-              onClick={togglePlayback}
-              type="button"
-            >
-              {isPlaying ? "暂停" : "播放"}
-            </button>
-          </div>
+        {state.status === "idle" ? (
+          <section className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center text-sm text-slate-400">
+            Pick a local <code className="text-slate-300">.cast</code> file to
+            start playback.
+          </section>
+        ) : null}
 
-          <div className="h-1 bg-slate-800">
-            <div
-              className="h-full bg-teal-400 transition-[width]"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-
-          <pre className="min-h-[28rem] overflow-auto whitespace-pre-wrap p-4 font-mono text-sm leading-6 text-emerald-100">
-            {terminalText || "等待播放输出..."}
-          </pre>
-        </section>
+        <div
+          ref={containerRef}
+          className={state.status === "ready" ? "" : "hidden"}
+        />
       </div>
     </main>
   );
