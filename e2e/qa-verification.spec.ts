@@ -37,7 +37,9 @@ test.describe("QA Verification — Full Acceptance Report", () => {
       page.getByText(/never uploaded|this device|不会上传/).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /Open a \.cast file|打开 \.cast 文件/ }),
+      page
+        .getByRole("link", { name: /Open a \.cast file|打开 \.cast 文件/ })
+        .first(),
     ).toBeVisible();
 
     await page.screenshot({
@@ -128,7 +130,7 @@ test.describe("QA Verification — Full Acceptance Report", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
     await expect(page.locator("h1")).toContainText("asciinema");
     await expect(
-      page.getByRole("link", { name: /打开 \.cast 文件/ }),
+      page.getByRole("link", { name: /打开 \.cast 文件/ }).first(),
     ).toBeVisible();
 
     await page.screenshot({
@@ -284,7 +286,9 @@ test.describe("QA Verification — Full Acceptance Report", () => {
       await expect(page.locator("h1")).toBeVisible();
       // File picker visible
       await expect(
-        page.getByRole("link", { name: /Open a \.cast file|打开 \.cast 文件/ }),
+        page
+          .getByRole("link", { name: /Open a \.cast file|打开 \.cast 文件/ })
+          .first(),
       ).toBeVisible();
 
       await page.screenshot({
