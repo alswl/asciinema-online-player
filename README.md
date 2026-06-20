@@ -21,7 +21,7 @@ A modern, privacy-first web player for [asciinema](https://asciinema.org) record
    brew install asciinema
    asciinema rec demo.cast
    ```
-2. **Open** [the player](https://alswl.github.io/asciinema-online-player/play) and select your `.cast` file
+2. **Open** [the player](https://asciinema-online-player.alswl.com/play) and select your `.cast` file
 3. **Watch** — pause, rewind, copy text, switch themes
 
 ## Development
@@ -45,7 +45,7 @@ npm run build      # Static export → out/
 | Icons     | lucide-react                           |
 | Player    | asciinema-player 3.x                   |
 | Tests     | Vitest + Testing Library, Playwright   |
-| CI        | GitHub Actions → GitHub Pages          |
+| CI        | GitHub Actions → Cloudflare Pages      |
 
 ## License
 
