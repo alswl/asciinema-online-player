@@ -5,9 +5,5 @@ coverage/
 *.log
 *.tsbuildinfo
 .DS_Store
-test-results/
+test-output/
 specs/
-playwright-report/
-test-reports/
-player-screenshot.png
-docs/reports/artifacts/

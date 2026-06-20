@@ -1,34 +1,52 @@
-# asciinema-online-player
+# asciinema online player
 
-Frontend-only static asciinema online player.
+A modern, privacy-first web player for [asciinema](https://asciinema.org) recordings. Open `.cast` files directly in your browser — nothing leaves your device.
 
-## MVP
+![Screenshot](docs/screenshot.png)
 
-The first version intentionally keeps the scope small:
+## Features
 
-- Static Next.js app, exported as plain files.
-- Browser-only `.cast` loading through `fetch`.
-- Basic asciicast event parsing.
-- Basic play and pause.
-- Text playback with ANSI control sequences stripped.
+- **100% Private** — files are processed locally, never uploaded
+- **Works Offline** — fully functional without internet after initial page load
+- **Instant Playback** — open a `.cast` file and it plays immediately
+- **Dark & Light** — system, light, and dark theme modes with persistent preference
+- **English / 中文** — full bilingual UI, switch without reloading
+- **Keyboard Accessible** — WCAG 2.2 AA compliant, screen-reader friendly
+- **Atomic Replace** — swap recordings without losing the current one
 
-Advanced terminal rendering, seek, speed control, resize handling, and performance work are tracked in [ROADMAP.md](./ROADMAP.md).
+## How it works
 
-## Commands
+1. **Record** your terminal with [asciinema](https://asciinema.org/docs/installation):
+   ```bash
+   brew install asciinema
+   asciinema rec demo.cast
+   ```
+2. **Open** [the player](https://alswl.github.io/asciinema-online-player/play) and select your `.cast` file
+3. **Watch** — pause, rewind, copy text, switch themes
+
+## Development
 
 ```bash
 npm install
-npm run dev
-npm run lint
-npm run typecheck
-npm run test
-npm run build
+npm run dev        # Turbopack dev server
+npm run lint       # ESLint
+npm run typecheck  # TypeScript
+npm run test       # Vitest
+npm run e2e        # Playwright
+npm run build      # Static export → out/
 ```
 
-## Static Deployment
+## Tech Stack
 
-```bash
-npm run build
-```
+| Layer     | Choice                                 |
+| --------- | -------------------------------------- |
+| Framework | Next.js 16 (App Router, static export) |
+| UI        | React 19, Tailwind CSS 4               |
+| Icons     | lucide-react                           |
+| Player    | asciinema-player 3.x                   |
+| Tests     | Vitest + Testing Library, Playwright   |
+| CI        | GitHub Actions → GitHub Pages          |
 
-The static site is generated in `out/`.
+## License
+
+[GPL-3.0](LICENSE)

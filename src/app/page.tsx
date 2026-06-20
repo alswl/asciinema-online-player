@@ -1,5 +1,5 @@
-import { Player } from "../components/player";
+import { HomePage } from "../components/home-page";
 
 export default function Home() {
-  return <Player />;
+  return <HomePage />;
 }
